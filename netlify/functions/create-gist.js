@@ -8,13 +8,13 @@ exports.handler = async (event) => {
     if (!content) throw new Error("Missing fingerprint content");
 
     // Token GitHub được lấy từ biến môi trường Netlify
-    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-    if (!GITHUB_TOKEN) throw new Error("Server chưa cấu hình GITHUB_TOKEN");
+    const TOKEN = process.env.TOKEN;
+    if (!TOKEN) throw new Error("Server chưa cấu hình GITHUB_TOKEN");
 
     const response = await fetch("https://api.github.com/gists", {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_TOKEN}`,
+        "Authorization": `token ${có TOKEN}`,
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
         "User-Agent": "Fingerprint-App"
